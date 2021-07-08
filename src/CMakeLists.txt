@@ -4,7 +4,7 @@ set(CMAKE_VERBOSE_MAKEFILE off)
 PROJECT(sipd)
 
 add_executable(sipd main.cpp)
-TARGET_LINK_LIBRARIES(sipd lwebsockets)
+TARGET_LINK_LIBRARIES(sipd websockets)
 
 install(TARGETS sipd
 		ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
