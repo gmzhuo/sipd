@@ -73,5 +73,28 @@ struct lws_protocols protocols[] = {
 
 int main(int argc, char **argv)
 {
-  return 0;
+  // 信号处理函数
+    signal( SIGTERM, sighdl );
+ 
+    struct lws_context_creation_info ctx_info = { 0 };
+    ctx_info.port = 8000;
+    ctx_info.iface = NULL; // 在所有网络接口上监听
+    ctx_info.protocols = protocols;
+    ctx_info.gid = -1;
+    ctx_info.uid = -1;
+    ctx_info.options = LWS_SERVER_OPTION_VALIDATE_UTF8;
+
+    ctx_info.ssl_ca_filepath = "../ca/ca-cert.pem";
+    ctx_info.ssl_cert_filepath = "./server-cert.pem";
+    ctx_info.ssl_private_key_filepath = "./server-key.pem";
+    ctx_info.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
+    //ctx_info.options |= LWS_SERVER_OPTION_REQUIRE_VALID_OPENSSL_CLIENT_CERT;
+    
+    struct lws_context *context = lws_create_context(&ctx_info);
+    while ( !exit_sig ) {
+        lws_service(context, 1000);
+    }
+    lws_context_destroy(context);
+
+    return 0;
 }
