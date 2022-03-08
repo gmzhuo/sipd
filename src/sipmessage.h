@@ -8,6 +8,7 @@ public:
   virtual bool isSolicit() const;
   const std::string& getDestCommunication() const;
   const std::string& getDestTarget() const;
+  std::string& toString() const;
 private:
   std::string m_method;
   std::string m_ua;
