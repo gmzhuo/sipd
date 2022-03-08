@@ -20,3 +20,16 @@ void SIPRouter::forwardSolicit(const SIPEndpoint& from, const SIPMessage& messag
     }
   }
 }
+
+void SIPRouter::registerEndpoint(std::shared_ptr<SIPEndpoint> &ep, const std::string& ua, const std::string& communication)
+{
+  m_endpointsMapByCommunication[communication] = ep;
+  auto it = m_endpointsMapByName.find(ua);
+  if(it != m_endpointsMapByName.end()) {
+    it->second.push_back(ep);
+  } else {
+    std::list<std::shared_ptr<SIPEndpoint>> epl;
+    epl.push_back(ep);
+    m_endpointsMapByName[ua] = epl;
+  }
+}
