@@ -15,7 +15,7 @@ private:
   std::string m_ruri;
   std::string m_body;
   std::map<std::string, std::string> m_headers;
-  std::map<std::string, std::string> m_extraHeaders;
+  std::list<std::string> m_extraHeaders;
   std::string m_destCommunication;
   std::string m_destTarget;
   bool m_isSolicit;
