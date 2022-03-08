@@ -4,7 +4,7 @@ class SIPMessage;
 
 class SIPRouter{
 protected:
-  SIPRouter() = default;
+  SIPRouter(const std::string realm);
   virtual ~SIPRouter() = default;
   SIPRouter(const SIPRouter& router) = deleted;
   SIPRouter& operator=(const SIPRouter& router) = deleted;
@@ -14,4 +14,5 @@ public:
   void registerEndpoint(std::shared_ptr<SIPEndpoint>, const std::string& ua, const std::string& communication);
 private:
   std::map<std::string, std::map<std::string, std::shared_ptr<SIPEndpoint>>> m_endpoints;
+  std::string m_realm;
 };
