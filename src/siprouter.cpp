@@ -1,7 +1,19 @@
 #include "siprouter.h"
+#include "sipendpoint.h"
+
+SIPRouter::SIPRouter(const std::string realm):
+  m_realm(realm)
+{
+}
 
 void SIPRouter::forwardMessage(const SIPEndpoint& from, const SIPMessage& message)
 {
+  std::string realm = message.getRealm();
+  if(realm != m_realm) {
+    this->forwardOut(from, message);
+    return;
+  }
+
   std::string target = message.getDestCommunication();
   std::string ua = message.getDestTarget();
   auto it = m_endpoints.find(ua);
@@ -17,12 +29,28 @@ void SIPRouter::forwardMessage(const SIPEndpoint& from, const SIPMessage& messag
 
 void SIPRouter::forwardSolicit(const SIPEndpoint& from, const SIPMessage& message)
 {
+  std::string realm = message.getRealm();
+  if(realm != m_realm) {
+    this->forwardOut(from, message);
+    return;
+  }
+
   std::string ua = message.getDestTarget();
   auto it = m_endpoints.find(ua);
   if(it != m_endpoints.end()) {
     for(auto eip = it->second->begin(); eip != it->second->end(); ++eip) {
       eip->second->sendMessage(message);
     }
+  }
+}
+
+void SIPRouter::forwardOutput(const SIPEndpoint& from, const SIPMessage& message)
+{
+  //create or find the connection to remote server;
+  std::share_ptr<SIPEndpoint> remoteServer;
+
+  if(remoteServer) {
+    remoteServer->sendMessage(message);
   }
 }
 
