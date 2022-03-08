@@ -11,4 +11,5 @@ public:
 private:
   std::string m_destCommunication;
   std::string m_destTarget;
+  bool m_isSolicit;
 };
