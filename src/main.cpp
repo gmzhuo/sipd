@@ -1,100 +1,175 @@
-#include <stdio.h>
-//#include <libwebsockets.h>
-#include <signal.h>
-#include <string.h>
-#if 0
-static volatile int exit_sig = 0;
-#define MAX_PAYLOAD_SIZE  10 * 1024
+//
+// Copyright (c) 2016-2019 Vinnie Falco (vinnie dot falco at gmail dot com)
+//
+// Distributed under the Boost Software License, Version 1.0. (See accompanying
+// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+//
+// Official repository: https://github.com/boostorg/beast
+//
+//------------------------------------------------------------------------------
+//
+// Example: WebSocket server, synchronous
+//
+//------------------------------------------------------------------------------
+#include <boost/beast/core.hpp>
+#include <boost/beast/websocket.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/local/stream_protocol.hpp>
+#include <cstdlib>
+#include <functional>
+#include <iostream>
+#include <string>
+#include <thread>
+#include <codecvt>
+namespace beast = boost::beast;         // from <boost/beast.hpp>
+namespace http = beast::http;           // from <boost/beast/http.hpp>
+namespace websocket = beast::websocket; // from <boost/beast/websocket.hpp>
+namespace net = boost::asio;            // from <boost/asio.hpp>
+using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
+using stream = boost::asio::local::stream_protocol;       // from <boost/local/ip/tcp.stream_protocol>
 
-void sighdl( int sig ) {
-    lwsl_notice( "%d traped", sig );
-    exit_sig = 1;
-}
 
-/**
- * 会话上下文对象，结构根据需要自定义
- */
-struct session_data {
-    int msg_count;
-    unsigned char buf[LWS_PRE + MAX_PAYLOAD_SIZE];
-    int len;
-    bool bin;
-    bool fin;
-};
-
-static int protocol_my_callback( struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len ) {
-    struct session_data *data = (struct session_data *) user;
-    switch ( reason ) {
-        case LWS_CALLBACK_ESTABLISHED:       // 当服务器和客户端完成握手后
-            printf("Client connect!\n");
-            break;
-        case LWS_CALLBACK_RECEIVE:           // 当接收到客户端发来的帧以后
-            // 判断是否最后一帧
-            data->fin = lws_is_final_fragment( wsi );
-            // 判断是否二进制消息
-            data->bin = lws_frame_is_binary( wsi );
-            // 对服务器的接收端进行流量控制，如果来不及处理，可以控制之
-            // 下面的调用禁止在此连接上接收数据
-            lws_rx_flow_control( wsi, 0 );
- 
-            // 业务处理部分，为了实现Echo服务器，把客户端数据保存起来
-            memcpy( &data->buf[ LWS_PRE ], in, len );
-            data->len = len;
-            printf("recvied message:%s\n",in);
- 
-            // 需要给客户端应答时，触发一次写回调
-            lws_callback_on_writable( wsi );
-            break;
-        case LWS_CALLBACK_SERVER_WRITEABLE:   // 当此连接可写时
-            lws_write( wsi, &data->buf[ LWS_PRE ], data->len, LWS_WRITE_TEXT );
-            // 下面的调用允许在此连接上接收数据
-            lws_rx_flow_control( wsi, 1 );
-            break;
-    }
-    // 回调函数最终要返回0，否则无法创建服务器
-    return 0;
-}
-
-/**
- * 支持的WebSocket子协议数组
- * 子协议即JavaScript客户端WebSocket(url, protocols)第2参数数组的元素
- * 你需要为每种协议提供回调函数
- */
-struct lws_protocols protocols[] = {
-    {
-        //协议名称，协议回调，接收缓冲区大小
-        "ws", protocol_my_callback, sizeof( struct session_data ), MAX_PAYLOAD_SIZE,
-    },
-    {
-        NULL, NULL,   0 // 最后一个元素固定为此格式
-    }
-};
-#endif
-
-int main(int argc, char **argv)
+class session
+	: public std::enable_shared_from_this<session>
 {
-#if 0
-	// 信号处理函数
-    signal( SIGTERM, sighdl );
-    struct lws_context_creation_info ctx_info = { 0 };
-    ctx_info.port = 8000;
-    ctx_info.iface = NULL; // 在所有网络接口上监听
-    ctx_info.protocols = protocols;
-    ctx_info.gid = -1;
-    ctx_info.uid = -1;
-    ctx_info.options = LWS_SERVER_OPTION_VALIDATE_UTF8;
+public:
+	session(tcp::socket socket)
+		: ws(std::move(socket))
+	{
+	}
 
-    ctx_info.ssl_ca_filepath = "../ca/ca-cert.pem";
-    ctx_info.ssl_cert_filepath = "./server-cert.pem";
-    ctx_info.ssl_private_key_filepath = "./server-key.pem";
-    ctx_info.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
-    //ctx_info.options |= LWS_SERVER_OPTION_REQUIRE_VALID_OPENSSL_CLIENT_CERT;
-    
-    struct lws_context *context = lws_create_context(&ctx_info);
-    while ( !exit_sig ) {
-        lws_service(context, 1000);
+	void start()
+	{
+		// Set suggested timeout settings for the websocket
+		ws.set_option(
+			websocket::stream_base::timeout::suggested(
+			beast::role_type::server));
+
+        // Set a decorator to change the Server of the handshake
+		ws.set_option(websocket::stream_base::decorator(
+			[](websocket::response_type& res)
+			{
+				res.set(http::field::server,
+					std::string(BOOST_BEAST_VERSION_STRING) +
+					" websocket-server-async");
+            }));
+
+		// Accept the websocket handshake
+		ws.async_accept(
+			beast::bind_front_handler(
+			&session::on_accept,
+			shared_from_this()));
+	}
+
+private:
+	void
+    on_accept(beast::error_code ec)
+    {
+		if(ec)
+			return;
+
+		// Read a message
+		do_read();
+	}
+
+	void do_read()
+	{
+		// Read a message into our buffer
+		ws.async_read(
+			buffer_, beast::bind_front_handler(
+				&session::on_read,
+				shared_from_this()));
+	}
+
+	void
+	on_read(beast::error_code ec, std::size_t bytes_transferred)
+	{
+		boost::ignore_unused(bytes_transferred);
+
+		// This indicates that the session was closed
+		if(ec == websocket::error::closed)
+			return;
+
+		if(ec)
+			return;
+
+		// Echo the message
+		ws.text(ws.got_text());
+		ws.async_write(
+			buffer_.data(),
+			beast::bind_front_handler(
+				&session::on_write,
+				shared_from_this()));
+	}
+
+	void
+	on_write(
+		beast::error_code ec,
+		std::size_t bytes_transferred)
+	{
+		boost::ignore_unused(bytes_transferred);
+
+		if(ec)
+			return;
+
+		// Clear the buffer
+		buffer_.consume(buffer_.size());
+
+		// Do another read
+		do_read();
+	}
+
+	websocket::stream<tcp::socket> ws;
+	beast::flat_buffer buffer_;
+};
+
+class server
+{
+public:
+	server(boost::asio::io_context& io_context, const char *pathname, unsigned short port)
+	 : acceptor_(io_context, tcp::endpoint(net::ip::make_address(pathname), port))
+	{
+		do_accept();
+	}
+
+private:
+	void do_accept()
+	{
+		acceptor_.async_accept(
+			[this](boost::system::error_code ec, tcp::socket socket)
+			{
+				if (!ec)
+				{
+					std::make_shared<session>(std::move(socket))->start();
+				}
+
+				do_accept();
+			});
+	}
+
+	tcp::acceptor acceptor_;
+};
+
+
+void run(const char *pathname, unsigned short port)
+{
+	boost::asio::io_context io_context;
+
+	server s(io_context, pathname, port);
+
+	io_context.run();
+}
+
+//------------------------------------------------------------------------------
+int main(int argc, char* argv[])
+{
+    try
+    {
+		run(argv[1], (unsigned short)atoi(argv[2]));
     }
-    lws_context_destroy(context);
-#endif
-    return 0;
+    catch (const std::exception & e)
+    {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return EXIT_FAILURE;
+    }
 }
