@@ -5,6 +5,9 @@ PROJECT(sipd)
 
 add_executable(sipd main.cpp siprouter.cpp sipmessage.cpp)
 
+TARGET_LINK_LIBRARIES(sipd crypto)
+TARGET_LINK_LIBRARIES(sipd ssl)
+
 install(TARGETS sipd
 		ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 		LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

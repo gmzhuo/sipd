@@ -15,6 +15,7 @@
 #include <boost/beast/websocket.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/local/stream_protocol.hpp>
+#include <boost/asio/ssl.hpp>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
@@ -150,12 +151,116 @@ private:
 	tcp::acceptor acceptor_;
 };
 
+class sslSession : public std::enable_shared_from_this<sslSession>
+{
+public:
+	sslSession(boost::asio::ssl::stream<tcp::socket> socket)
+		: socket_(std::move(socket))
+	{
+	}
+
+	void start()
+	{
+		do_handshake();
+	}
+
+private:
+	void do_handshake()
+	{
+		auto self(shared_from_this());
+		socket_.async_handshake(boost::asio::ssl::stream_base::server, 
+			[this, self](const boost::system::error_code& error)
+			{
+				if (!error)
+				{
+					do_read();
+				}
+			});
+	}
+
+	void do_read()
+	{
+		auto self(shared_from_this());
+		socket_.async_read_some(boost::asio::buffer(data_),
+			[this, self](const boost::system::error_code& ec, std::size_t length)
+			{
+				if (!ec)
+				{
+					std::cout << "read: " << data_ << std::endl;
+					do_write(length);
+				}
+			});
+	}
+
+	void do_write(std::size_t length)
+	{
+		auto self(shared_from_this());
+		boost::asio::async_write(socket_, boost::asio::buffer(data_, length),
+			[this, self](const boost::system::error_code& ec,
+				std::size_t /*length*/)
+			{
+				if (!ec)
+				{
+					do_read();
+				}
+			});
+	}
+
+	boost::asio::ssl::stream<tcp::socket> socket_;
+	char data_[1024];
+};
+
+class sslServer
+{
+public:
+	sslServer(boost::asio::io_context& io_context, unsigned short port)
+		: acceptor_(io_context, tcp::endpoint(tcp::v4(), port)),
+		context_(boost::asio::ssl::context::sslv23)
+	{
+		context_.set_options(
+			boost::asio::ssl::context::default_workarounds
+				| boost::asio::ssl::context::no_sslv2
+				| boost::asio::ssl::context::single_dh_use);
+		context_.set_password_callback(std::bind(&sslServer::get_password, this));
+		context_.use_certificate_chain_file("/etc/nginx/server.crt");
+		context_.use_private_key_file("/etc/nginx/server.key.unsecure", boost::asio::ssl::context::pem);
+		context_.use_tmp_dh_file("dh2048.pem");
+
+		do_accept();
+	}
+
+private:
+	std::string get_password() const
+	{
+		return "test";
+	}
+
+	void do_accept()
+	{
+		acceptor_.async_accept(
+			[this](const boost::system::error_code& error, tcp::socket socket)
+			{
+				if (!error)
+				{
+					std::make_shared<sslSession>(
+						boost::asio::ssl::stream<tcp::socket>(
+						std::move(socket), context_))->start();
+				}
+
+				do_accept();
+			});
+	}
+
+	tcp::acceptor acceptor_;
+	boost::asio::ssl::context context_;
+};
 
 void run(const char *pathname, unsigned short port)
 {
 	boost::asio::io_context io_context;
 
 	server s(io_context, pathname, port);
+	sslServer ss(io_context, 5080);
 
 	io_context.run();
 }
