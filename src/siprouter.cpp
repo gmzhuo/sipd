@@ -1,5 +1,6 @@
 #include "siprouter.h"
 #include "sipendpoint.h"
+#include "sipmessage.h"
 
 SIPRouter::SIPRouter(const std::string realm):
   m_realm(realm)
@@ -10,7 +11,7 @@ void SIPRouter::forwardMessage(const SIPEndpoint& from, const SIPMessage& messag
 {
   std::string realm = message.getRealm();
   if(realm != m_realm) {
-    this->forwardOut(from, message);
+    this->forwardOutput(from, message);
     return;
   }
 
@@ -19,8 +20,8 @@ void SIPRouter::forwardMessage(const SIPEndpoint& from, const SIPMessage& messag
   auto it = m_endpoints.find(ua);
 
   if(it != m_endpointsMapByCommunication.end()) {
-    auto eit = it->second->find(target);
-    if(eit != it->second->end()) {
+    auto eit = it->second.find(target);
+    if(eit != it->second.end()) {
       eit->second->sendMessage(message);
     }
   }
@@ -31,14 +32,14 @@ void SIPRouter::forwardSolicit(const SIPEndpoint& from, const SIPMessage& messag
 {
   std::string realm = message.getRealm();
   if(realm != m_realm) {
-    this->forwardOut(from, message);
+    this->forwardOutput(from, message);
     return;
   }
 
   std::string ua = message.getDestTarget();
   auto it = m_endpoints.find(ua);
   if(it != m_endpoints.end()) {
-    for(auto eip = it->second->begin(); eip != it->second->end(); ++eip) {
+    for(auto eip = it->second.begin(); eip != it->second.end(); ++eip) {
       eip->second->sendMessage(message);
     }
   }
@@ -47,7 +48,7 @@ void SIPRouter::forwardSolicit(const SIPEndpoint& from, const SIPMessage& messag
 void SIPRouter::forwardOutput(const SIPEndpoint& from, const SIPMessage& message)
 {
   //create or find the connection to remote server;
-  std::share_ptr<SIPEndpoint> remoteServer;
+  std::shared_ptr<SIPEndpoint> remoteServer;
 
   if(remoteServer) {
     remoteServer->sendMessage(message);
@@ -60,7 +61,7 @@ void SIPRouter::registerEndpoint(std::shared_ptr<SIPEndpoint> &ep, const std::st
   if(it != m_endpoints.end()) {
     it->second[communication] = ep;
   } else {
-    std::map<std::string std::shared_ptr<SIPEndpoint>> eps;
+    std::map<std::string, std::shared_ptr<SIPEndpoint>> eps;
     eps[communication] = ep;
     m_endpoints[ua] = eps;
   }

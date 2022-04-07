@@ -1,8 +1,8 @@
 #include <stdio.h>
-#include <libwebsockets.h>
+//#include <libwebsockets.h>
 #include <signal.h>
 #include <string.h>
-
+#if 0
 static volatile int exit_sig = 0;
 #define MAX_PAYLOAD_SIZE  10 * 1024
 
@@ -69,13 +69,13 @@ struct lws_protocols protocols[] = {
         NULL, NULL,   0 // 最后一个元素固定为此格式
     }
 };
-
+#endif
 
 int main(int argc, char **argv)
 {
-  // 信号处理函数
+#if 0
+	// 信号处理函数
     signal( SIGTERM, sighdl );
- 
     struct lws_context_creation_info ctx_info = { 0 };
     ctx_info.port = 8000;
     ctx_info.iface = NULL; // 在所有网络接口上监听
@@ -95,6 +95,6 @@ int main(int argc, char **argv)
         lws_service(context, 1000);
     }
     lws_context_destroy(context);
-
+#endif
     return 0;
 }

@@ -16,9 +16,9 @@ SIPMessage::~SIPMessage()
 
 std::string SIPMessage::toString() const
 {
-  ostringstream os;
+  std::ostringstream os;
 
-  os << m_method << " " << m_ruri << SIP/2.0\r\n";
+  os << m_method << " " << m_ruri << "SIP/2.0\r\n";
   for(auto it = m_headers.begin(); it != m_headers.end(); ++it) {
     os << it->first << ": " << it->second << "\r\n";
   }
@@ -33,6 +33,13 @@ std::string SIPMessage::toString() const
   } else {
     os << "Content-Length: 0\r\n\r\n";
   } 
+
+  return os.str();
+}
+
+std::string SIPMessage::getRealm() const
+{
+	return std::string("");
 }
 
 bool SIPMessage::isSolicit() const
