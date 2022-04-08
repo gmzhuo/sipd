@@ -1,121 +1,174 @@
-#include <websocketpp/common/asio.hpp>
-#include <websocketpp/common/memory.hpp>
-#include <websocketpp/common/functional.hpp>
+#pragma once
 
-using websocketpp::lib::placeholders::_1;
-using websocketpp::lib::placeholders::_2;
-using websocketpp::lib::bind;
+#include <boost/beast/core.hpp>
+#include <boost/beast/websocket.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/local/stream_protocol.hpp>
+#include <boost/asio/ssl.hpp>
+#include <cstdlib>
+#include <functional>
+#include <iostream>
+#include <string>
+#include <thread>
+#include <codecvt>
 
-namespace asio = websocketpp::lib::asio;
+#include "sipendpoint.h"
+#include "sipmessage.h"
 
-struct tcp_echo_session : websocketpp::lib::enable_shared_from_this<tcp_echo_session> {
-    typedef websocketpp::lib::shared_ptr<tcp_echo_session> ptr;
-    
-    tcp_echo_session(asio::io_service & service) : m_socket(service) {}
+namespace beast = boost::beast;         // from <boost/beast.hpp>
+namespace http = beast::http;           // from <boost/beast/http.hpp>
+namespace websocket = beast::websocket; // from <boost/beast/websocket.hpp>
+namespace net = boost::asio;            // from <boost/asio.hpp>
+using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
+using stream = boost::asio::local::stream_protocol;       // from <boost/local/ip/tcp.stream_protocol>
 
-    void start() {
-        m_socket.async_read_some(asio::buffer(m_buffer, sizeof(m_buffer)),
-            websocketpp::lib::bind(
-                &tcp_echo_session::handle_read, shared_from_this(), _1, _2));
-    }
-    
-    void handle_read(const asio::error_code & ec, size_t transferred) {
-        if (!ec) {
-            asio::async_write(m_socket,
-                asio::buffer(m_buffer, transferred),
-                    bind(&tcp_echo_session::handle_write, shared_from_this(), _1));
-        }
-    }
-    
-    void handle_write(const asio::error_code & ec) {
-        if (!ec) {
-            m_socket.async_read_some(asio::buffer(m_buffer, sizeof(m_buffer)),
-                bind(&tcp_echo_session::handle_read, shared_from_this(), _1, _2));
-        }
-    }
+class wsSession;
 
-    asio::ip::tcp::socket m_socket;
-    char m_buffer[1024];
-};
-
-struct local_echo_session : websocketpp::lib::enable_shared_from_this<local_echo_session> {
-    typedef websocketpp::lib::shared_ptr<local_echo_session> ptr;
-    
-    local_echo_session(asio::io_service & service) : m_socket(service) {}
-
-    void start() {
-        m_socket.async_read_some(asio::buffer(m_buffer, sizeof(m_buffer)),
-            websocketpp::lib::bind(
-                &local_echo_session::handle_read, shared_from_this(), _1, _2));
-    }
-    
-    void handle_read(const asio::error_code & ec, size_t transferred) {
-        if (!ec) {
-            asio::async_write(m_socket,
-                asio::buffer(m_buffer, transferred),
-                    bind(&local_echo_session::handle_write, shared_from_this(), _1));
-        }
-    }
-    
-    void handle_write(const asio::error_code & ec) {
-        if (!ec) {
-            m_socket.async_read_some(asio::buffer(m_buffer, sizeof(m_buffer)),
-                bind(&local_echo_session::handle_read, shared_from_this(), _1, _2));
-        }
-    }
-
-    asio::local::stream_protocol::socket m_socket;
-    char m_buffer[2048];
-};
-
-struct tcp_echo_server {
-    tcp_echo_server(asio::io_service & service, short port)
-        : m_service(service)
-        , m_acceptor(service, asio::ip::tcp::endpoint(asio::ip::tcp::v6(), port))
-    {
-        this->start_accept();
-    }
-    
-    void start_accept() {
-        tcp_echo_session::ptr new_session(new tcp_echo_session(m_service));
-        m_acceptor.async_accept(new_session->m_socket,
-            bind(&tcp_echo_server::handle_accept, this, new_session, _1));
-    }
-    
-    void handle_accept(tcp_echo_session::ptr new_session, const asio::error_code & ec) {
-        if (!ec) {
-            new_session->start();
-        }
-        start_accept();
-    }
-
-    asio::io_service & m_service;
-    asio::ip::tcp::acceptor m_acceptor;
-};
-
-
-struct local_echo_server {
-	local_echo_server(asio::io_service & service, std::string address):
-		m_service(service),
-		m_acceptor(m_service, asio::local::stream_protocol::endpoint(address))
+class wsEndpoint:public SIPEndpoint {
+public:
+	wsEndpoint(SIPRouter *router, wsSession* session)
+		:SIPEndpoint(router), m_wsSession(session)
 	{
-		this->start_accept();
+	}
+protected:
+	virtual int sendMessage(const std::shared_ptr<SIPMessage>& message);
+protected:
+	wsSession *m_wsSession;
+};
+
+class wsSession
+	: public std::enable_shared_from_this<wsSession>
+{
+public:
+	wsSession(SIPRouter *router, tcp::socket socket)
+		: ws(std::move(socket))
+	{
+		m_endpoint = std::make_shared<wsEndpoint>(router, this);
+	}
+	virtual ~wsSession()
+	{
+		std::cout << "ws session is closed" << std::endl;
+		if(m_endpoint) {
+			m_endpoint->onSessionClosed();
+		}
+	}
+public:
+	void start()
+	{
+		// Set suggested timeout settings for the websocket
+		ws.set_option(
+			websocket::stream_base::timeout::suggested(
+			beast::role_type::server));
+
+        // Set a decorator to change the Server of the handshake
+		ws.set_option(websocket::stream_base::decorator(
+			[](websocket::response_type& res)
+			{
+				res.set(http::field::server,
+					std::string(BOOST_BEAST_VERSION_STRING) +
+					" websocket-server-async");
+            }));
+
+		// Accept the websocket handshake
+		ws.async_accept(
+			beast::bind_front_handler(
+			&wsSession::on_accept,
+			shared_from_this()));
+	}
+public:
+	void sendMessage(const char *msg, size_t len)
+	{
+		ws.async_write(boost::asio::buffer(msg, len),
+			[this](beast::error_code ec, std::size_t bytes_transferred)
+			{
+			});
+	}
+private:
+	void
+    on_accept(beast::error_code ec)
+    {
+		if(ec)
+			return;
+
+		// Read a message
+		do_read();
 	}
 
-	void start_accept() {
-        local_echo_session::ptr new_session(new local_echo_session(m_service));
-        m_acceptor.async_accept(new_session->m_socket,
-            bind(&local_echo_server::handle_accept, this, new_session, _1));
-    }
+	void do_read()
+	{
+		// Read a message into our buffer
+		ws.async_read(
+			buffer_, beast::bind_front_handler(
+				&wsSession::on_read,
+				shared_from_this()));
+	}
 
-	void handle_accept(local_echo_session::ptr new_session, const asio::error_code & ec) {
-        if (!ec) {
-            new_session->start();
-        }
-        start_accept();
-    }
+	void
+	on_read(beast::error_code ec, std::size_t bytes_transferred)
+	{
+		boost::ignore_unused(bytes_transferred);
 
-	asio::io_service & m_service;
-	asio::local::stream_protocol::acceptor m_acceptor;
+		// This indicates that the session was closed
+		if(ec == websocket::error::closed)
+			return;
+
+		if(ec)
+			return;
+
+		auto data = buffer_.data();
+		const char *mydata = (const char *)data.data();
+		size_t len = data.size();
+		auto sm = std::make_shared<SIPMessage>(mydata, len);
+		if(m_endpoint) {
+			m_endpoint->onMessage(sm);
+		}
+		buffer_.consume(len);
+		do_read();
+	}
+
+	void
+	on_write(
+		beast::error_code ec,
+		std::size_t bytes_transferred)
+	{
+		boost::ignore_unused(bytes_transferred);
+
+		if(ec)
+			return;
+
+		buffer_.consume(buffer_.size());
+	}
+
+	websocket::stream<tcp::socket> ws;
+	beast::flat_buffer buffer_;
+	std::shared_ptr<wsEndpoint> m_endpoint;
+};
+
+class wsServer
+{
+public:
+	wsServer(SIPRouter *router, boost::asio::io_context& io_context, const char *pathname, unsigned short port)
+	 : acceptor_(io_context, tcp::endpoint(net::ip::make_address(pathname), port)), m_router(router)
+	{
+		do_accept();
+	}
+
+private:
+	void do_accept()
+	{
+		acceptor_.async_accept(
+			[this](boost::system::error_code ec, tcp::socket socket)
+			{
+				if (!ec)
+				{
+					std::make_shared<wsSession>(m_router, std::move(socket))->start();
+				}
+
+				do_accept();
+			});
+	}
+
+	tcp::acceptor acceptor_;
+	SIPRouter *m_router;
 };
 

@@ -3,7 +3,8 @@ cmake_minimum_required(VERSION 2.8)
 set(CMAKE_VERBOSE_MAKEFILE off)
 PROJECT(sipd)
 
-add_executable(sipd main.cpp siprouter.cpp sipmessage.cpp)
+add_executable(sipd main.cpp siprouter.cpp sipmessage.cpp sslserver.cpp wsserver.cpp
+		sipendpoint.cpp)
 
 TARGET_LINK_LIBRARIES(sipd crypto)
 TARGET_LINK_LIBRARIES(sipd ssl)
