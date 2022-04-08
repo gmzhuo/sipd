@@ -94,6 +94,8 @@ private:
 		if(ec)
 			return;
 
+		do_read();
+#if 0
 		// Echo the message
 		ws.text(ws.got_text());
 		ws.async_write(
@@ -101,6 +103,7 @@ private:
 			beast::bind_front_handler(
 				&session::on_write,
 				shared_from_this()));
+#endif
 	}
 
 	void
@@ -117,7 +120,7 @@ private:
 		buffer_.consume(buffer_.size());
 
 		// Do another read
-		do_read();
+		//do_read();
 	}
 
 	websocket::stream<tcp::socket> ws;
@@ -175,7 +178,8 @@ private:
 				{
 					do_read();
 				}
-			});
+			}
+		);
 	}
 
 	void do_read()
@@ -186,10 +190,12 @@ private:
 			{
 				if (!ec)
 				{
-					std::cout << "read: " << data_ << std::endl;
-					do_write(length);
+					data_[length] = 0;
+					printf("data: %s\r\n", data_);
+					do_read();
 				}
-			});
+			}
+		);
 	}
 
 	void do_write(std::size_t length)
@@ -199,11 +205,8 @@ private:
 			[this, self](const boost::system::error_code& ec,
 				std::size_t /*length*/)
 			{
-				if (!ec)
-				{
-					do_read();
-				}
-			});
+			}
+		);
 	}
 
 	boost::asio::ssl::stream<tcp::socket> socket_;
