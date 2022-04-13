@@ -146,7 +146,7 @@ SIPMessage::SIPMessage(const char *data, size_t length)
 				auto err = regexec(&m_headlineRegex, line, 20, match, 0);
 				if(err == 0) {
 					std::string head(&line[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
-					std::string value(&line[match[2].rm_so], match[2].rm_eo - match[2].rm_so);
+					std::string value(&line[match[2].rm_so], match[2].rm_eo - match[2].rm_so - 1);
 					m_headers[head.c_str()] = value.c_str();
 				} else {
 				}

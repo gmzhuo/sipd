@@ -68,7 +68,7 @@ void SIPRouter::forwardStatus(const std::shared_ptr<SIPEndpoint>& from, const st
 	auto &head = message->getHeader();
 	auto callID = head["Call-ID"];
 
-	std::cout << "Call-ID: " << callID <<std::endl;
+	std::cout << "Call-ID: " << callID << " length:" << callID.length() <<std::endl;
 
 	auto it = m_endpointsMapByCallID.find(ua);
 

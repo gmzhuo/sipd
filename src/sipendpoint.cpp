@@ -13,7 +13,7 @@ SIPEndpoint::~SIPEndpoint()
 {
 	printf("endpoint destructed\r\n");
 }
-	
+
 void SIPEndpoint::onSessionClosed()
 {
 	printf("in end point on closed %p\r\n", this);
@@ -28,6 +28,12 @@ void SIPEndpoint::onMessage(const std::shared_ptr<SIPMessage>& message)
 {
 	auto type = message->getTypeString();
 	std::cout << "on message " << type << std::endl;
+
+	auto &head = message->getHeader();
+	auto callID = head["Call-ID"];
+
+	std::cout << "Call-ID: " << callID << " length:" << callID.length() <<std::endl;
+
 	switch(message->getType()) {
 	case sipRegister:
 		doRegister(message);
