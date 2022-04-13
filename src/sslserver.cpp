@@ -2,9 +2,7 @@
 
 int sslEndpoint::sendMessage(const std::shared_ptr<SIPMessage>& message)
 {
-	auto msg = message->toString();
-
+	auto &msg = message->getMessage();
 	m_sslSession->sendMessage(msg.c_str(), msg.length());
-	printf("send msg %s\r\n", msg.c_str());
 	return 0;
 }

@@ -14,7 +14,12 @@ public:
 	void onMessage(const std::shared_ptr<SIPMessage>& message);
 protected:
 	void doRegister(const std::shared_ptr<SIPMessage>& message);
+public:
+	const std::string& getUA() const
+	{
+		return m_ua;
+	}
 private:
-  SIPRouter *m_router;
-  std::shared_ptr<SIPEndpoint> m_myself;
+	SIPRouter *m_router;
+	std::string m_ua;
 };

@@ -75,6 +75,7 @@ SIPMessage::SIPMessage()
 
 SIPMessage::SIPMessage(const char *data, size_t length)
 {
+	m_message = std::string(data, length);
 	static std::once_flag init_regex_flag;
 	static regex_t m_statusRegex;
 	static regex_t m_cmdlineRegex;
@@ -104,14 +105,15 @@ SIPMessage::SIPMessage(const char *data, size_t length)
 	});
 
 	m_type = sipInvalid;
-	printf("construct sipmessage from string\r\n");
+	//printf("construct sipmessage from string:\r\n");
+	//printf("%s\r\n", data);
 	std::string value(data, length);
 	std::istringstream is(value);
 
 	try {
 		char line[1024];
 		is.getline(line, sizeof(line));
-		printf("%s\r\n", line);
+		//printf("%s\r\n", line);
 		m_type = getMessageType(line);
 
 		printf("to exec cmdline match %s\r\n", line);
@@ -125,6 +127,8 @@ SIPMessage::SIPMessage(const char *data, size_t length)
 				m_method = method;
 				std::string version(&line[match[3].rm_so], match[3].rm_eo - match[3].rm_so);
 				m_version = version;
+				std::string target(&line[match[2].rm_so], match[2].rm_eo - match[2].rm_so);
+				m_target = target;
 				printf("method %s version %s\r\n", method.c_str(), version.c_str());
 				break;
 			}
@@ -147,7 +151,7 @@ SIPMessage::SIPMessage(const char *data, size_t length)
 				} else {
 				}
 			}
-			printf("%s\r\n", line);
+			//printf("%s\r\n", line);
 		}
 	} catch(...) {
 	}
@@ -175,6 +179,8 @@ std::shared_ptr<SIPMessage> SIPMessage::makeResponse(
 		result->m_content = m_content;
 	}
 
+	result->m_message = result->toString();
+
 	return result;
 }
 
@@ -193,7 +199,7 @@ std::string SIPMessage::toString() const
 
 	//printf("SIP %s %d %s\r\n",  m_status, m_reason.c_str());
 	if(m_method.length()) {
-		//os << m_method << " " << m_ruri << "SIP/" << m_version << " \r\n";
+		os << m_method << " " << m_target << " SIP/" << m_version << " \r\n";
 	} else {
 		os << "SIP/" << "2.0" << " " << m_status << " " << m_reason << "\r\n";
 	}
@@ -203,12 +209,10 @@ std::string SIPMessage::toString() const
 		os << it->first << ": " << it->second << "\r\n";
 	}
 
-	os << "Content-Length: 0\r\n";
+	os << "Content-Length: " << m_content.length() << "\r\n";
+	os << m_content;
 	os << "\r\n";
 
-	printf("msg:\r\n%s", os.str().c_str());
-
-	printf("msg finish\r\n");
 	return os.str();
 }
 

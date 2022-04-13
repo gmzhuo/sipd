@@ -26,25 +26,44 @@ public:
 
 class SIPMessage{
 public:
-  SIPMessage();
-  SIPMessage(const char *data, size_t length);
-  virtual ~SIPMessage();
+	SIPMessage();
+	SIPMessage(const char *data, size_t length);
+	virtual ~SIPMessage();
+private:
+	std::string toString() const;
 public:
-  std::shared_ptr<SIPMessage> makeResponse(unsigned short status, const char *reason,
+	std::shared_ptr<SIPMessage> makeResponse(unsigned short status, const char *reason,
 		const char *extension, const char *content) const;
-  std::string toString() const;
-  SIPMessageType getType() const {
-	  return m_type;
-  }
-  const char *getTypeString() const;
+	SIPMessageType getType() const {
+		return m_type;
+	}
+	const char *getTypeString() const;
+	const std::string& getMethod() const
+	{
+		return m_method;
+	}
+	const std::string& getTarget() const
+	{
+		return m_target;
+	}
+	const SIPMessageHead& getHeader() const
+	{
+		return m_headers;
+	}
+	const std::string& getMessage() const
+	{
+		return m_message;
+	}
 public:
-  unsigned short m_status;
-  std::string m_method;
-  std::string m_reason;
-  std::string m_version;
-  std::string m_content;
- 
-  SIPMessageHead m_headers;
- 
-  SIPMessageType m_type = sipInvalid;
+	std::string m_message;
+	unsigned short m_status;
+	std::string m_target;
+	std::string m_method;
+	std::string m_reason;
+	std::string m_version;
+	std::string m_content;
+	
+	SIPMessageHead m_headers;
+	
+	SIPMessageType m_type = sipInvalid;
 };
