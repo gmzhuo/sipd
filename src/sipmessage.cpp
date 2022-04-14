@@ -174,6 +174,7 @@ std::shared_ptr<SIPMessage> SIPMessage::makeResponse(
 	result->m_headers["From"] = this->m_headers["From"];
 	result->m_headers["Call-ID"] = this->m_headers["Call-ID"];
 	result->m_headers["CSeq"] = this->m_headers["CSeq"];
+	result->m_headers["Contact"] = this->m_headers["Contact"];
 
 	if(content) {
 		result->m_content = m_content;

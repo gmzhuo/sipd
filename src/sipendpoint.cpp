@@ -88,5 +88,7 @@ void SIPEndpoint::doRegister(const std::shared_ptr<SIPMessage>& message)
 	auto THIS = shared_from_this();
 	m_router->registerEndpoint(THIS);
 
+	std::cout << "recived reg request:" << std::endl << message->getMessage() << std::endl;
+	std::cout << "send reg response:" << std::endl << resp->getMessage() << std::endl;
 	this->sendMessage(resp);
 }
