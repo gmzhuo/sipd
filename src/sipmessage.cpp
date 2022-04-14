@@ -1,5 +1,6 @@
 #include "sipmessage.h"
 #include <sstream>
+#include <iostream>
 #include <cstring>
 #include <streambuf>
 #include <mutex>
@@ -8,6 +9,8 @@
 const char *SIPMessageStringType[sipInvalid + 2] = {
 	"REGISTER",
 	"INVITE",
+	"ACK",
+	"BYE",
 	"INVALID",
 	NULL
 };
@@ -37,9 +40,7 @@ static SIPMessageType getMessageType(const char *message)
 	for(int i = 0;; ++i) {
 		if(!SIPMessageStringType[i])
 			return sipInvalid;
-		printf("check %s %s\r\n", SIPMessageStringType[i], message);
 		if(strncmp(SIPMessageStringType[i], message, strlen(SIPMessageStringType[i])) == 0) {
-			printf("matched\r\n");
 			return (SIPMessageType)i;
 		}
 	}
@@ -80,6 +81,7 @@ SIPMessage::SIPMessage(const char *data, size_t length)
 	static regex_t m_statusRegex;
 	static regex_t m_cmdlineRegex;
 	static regex_t m_headlineRegex;
+	static regex_t m_fromRegex;
 	std::call_once(init_regex_flag, [](){
 		int status;
 		char errbuf[2048];
@@ -90,35 +92,38 @@ SIPMessage::SIPMessage(const char *data, size_t length)
 			regerror(status, &m_statusRegex, errbuf, sizeof(errbuf));
 			printf("compile %s %d %s\r\n", patten, status, errbuf);
 		}
+
 		patten = "(.+) (.+) SIP/(.+)";
 		status = regcomp(&m_cmdlineRegex, patten, REG_EXTENDED);
 		if(status < 0) {
 			regerror(status, &m_cmdlineRegex, errbuf, sizeof(errbuf));
 			printf("compile %s %d %s\r\n", patten, status, errbuf);
 		}
+
 		patten = "(.+): (.*)";
 		status = regcomp(&m_headlineRegex, patten, REG_EXTENDED);
 		if(status < 0) {
 			regerror(status, &m_headlineRegex, errbuf, sizeof(errbuf));
 			printf("compile %s %d %s\r\n", patten, status, errbuf);
 		}
+
+		patten = "<sip:(.+@.+)>";
+		status = regcomp(&m_fromRegex, patten, REG_EXTENDED);
+		if(status < 0) {
+			regerror(status, &m_fromRegex, errbuf, sizeof(errbuf));
+		}
 	});
 
 	m_type = sipInvalid;
-	//printf("construct sipmessage from string:\r\n");
-	//printf("%s\r\n", data);
+
 	std::string value(data, length);
 	std::istringstream is(value);
 
 	try {
 		char line[1024];
 		is.getline(line, sizeof(line));
-		//printf("%s\r\n", line);
-		m_type = getMessageType(line);
+		bool isStatus = false;
 
-		printf("to exec cmdline match %s\r\n", line);
-		//auto status = regcomp(&m_cmdlineRegex, "(*+) (*+) SIP/(d+.d+)", REG_EXTENDED);
-		//printf("compile result %d\r\n", status);
 		do {
 			regmatch_t match[20];
 			auto err = regexec(&m_cmdlineRegex, line, 20, match, 0);
@@ -129,11 +134,15 @@ SIPMessage::SIPMessage(const char *data, size_t length)
 				m_version = version;
 				std::string target(&line[match[2].rm_so], match[2].rm_eo - match[2].rm_so);
 				m_target = target;
-				printf("method %s version %s\r\n", method.c_str(), version.c_str());
+				m_type = getMessageType(method.c_str());
 				break;
 			}
-		
+
+			isStatus = true;
 			err = regexec(&m_statusRegex, line, 20, match, 0);
+			if(err == 0) {
+				printf("status message %s\r\n", data);
+			}
 			
 		}while(false);
 
@@ -148,11 +157,28 @@ SIPMessage::SIPMessage(const char *data, size_t length)
 					std::string head(&line[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
 					std::string value(&line[match[2].rm_so], match[2].rm_eo - match[2].rm_so - 1);
 					m_headers[head.c_str()] = value.c_str();
+					if(isStatus) {
+						if(head == "From") {
+							auto err = regexec(&m_fromRegex, line, 20, match, 0);
+							if(err == 0) {
+								std::string UA(&line[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
+								m_target = UA;
+							}
+						}
+					} else {
+						if(head == "To") {
+							auto err = regexec(&m_fromRegex, line, 20, match, 0);
+							if(err == 0) {
+								std::string UA(&line[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
+								m_target = UA;
+							}
+						} 
+					}
 				} else {
 				}
 			}
-			//printf("%s\r\n", line);
 		}
+		printf("message target %s\r\n", m_target.c_str());
 	} catch(...) {
 	}
 }

@@ -8,7 +8,8 @@
 typedef enum SIPMessageType{
 	sipRegister,
 	sipInvite,
-
+	sipACK,
+	sipBye,
 	sipInvalid
 } SIPMessageType;
 

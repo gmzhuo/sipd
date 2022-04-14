@@ -11,28 +11,21 @@ SIPEndpoint::SIPEndpoint(SIPRouter *router):
 
 SIPEndpoint::~SIPEndpoint()
 {
-	printf("endpoint destructed\r\n");
 }
 
 void SIPEndpoint::onSessionClosed()
 {
-	printf("in end point on closed %p\r\n", this);
-
-	printf("in end point on closed call router\r\n");
 	auto THIS = shared_from_this();
 	m_router->onSessionClosed(THIS);
-	printf("in end point on closed call router done %ld\r\n", THIS.use_count());
 }
 
 void SIPEndpoint::onMessage(const std::shared_ptr<SIPMessage>& message)
 {
 	auto type = message->getTypeString();
-	std::cout << "on message " << type << std::endl;
 
+	printf("ep %s recive:\r\n%s", m_ua.c_str(), message->getMessage().c_str());
 	auto &head = message->getHeader();
 	auto callID = head["Call-ID"];
-
-	std::cout << "Call-ID: " << callID << " length:" << callID.length() <<std::endl;
 
 	switch(message->getType()) {
 	case sipRegister:
@@ -44,7 +37,9 @@ void SIPEndpoint::onMessage(const std::shared_ptr<SIPMessage>& message)
 			m_router->forwardMessage(shared_from_this(), message);
 			printf("call router forwardMessage done\r\n");
 		} else {
+			printf("call router forwardStatus\r\n");
 			m_router->forwardStatus(shared_from_this(), message);
+			printf("call router forwardStatus done\r\n");
 		}
 		break;
 	}
@@ -64,7 +59,6 @@ void SIPEndpoint::doRegister(const std::shared_ptr<SIPMessage>& message)
 		status = regcomp(&m_fromRegex, patten, REG_EXTENDED);
 		if(status < 0) {
 			regerror(status, &m_fromRegex, errbuf, sizeof(errbuf));
-			printf("compile %s %d %s\r\n", patten, status, errbuf);
 		}
 	});
 
@@ -77,9 +71,7 @@ void SIPEndpoint::doRegister(const std::shared_ptr<SIPMessage>& message)
 	if(err == 0) {
 		std::string UA(&fromvalue[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
 		m_ua = UA;
-		std::cout << "finded UA: " << m_ua << " " << match[0].rm_so << match[0].rm_eo <<std::endl;
 	} else {
-		std::cout << "failed to find UA from " << fromvalue << std::endl;
 		return;
 	}
 
@@ -88,7 +80,5 @@ void SIPEndpoint::doRegister(const std::shared_ptr<SIPMessage>& message)
 	auto THIS = shared_from_this();
 	m_router->registerEndpoint(THIS);
 
-	std::cout << "recived reg request:" << std::endl << message->getMessage() << std::endl;
-	std::cout << "send reg response:" << std::endl << resp->getMessage() << std::endl;
 	this->sendMessage(resp);
 }

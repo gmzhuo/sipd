@@ -35,8 +35,6 @@ void SIPRouter::forwardMessage(const std::shared_ptr<SIPEndpoint>& from, const s
 	auto &head = message->getHeader();
 	auto callID = head["Call-ID"];
 
-	std::cout << "Loged Call-ID: " << callID << " for UA " << from->getUA() <<std::endl;
-
 	auto it = m_endpointsMapByCallID.find(from->getUA());
 	if(it != m_endpointsMapByCallID.end()) {
 		it->second[callID] = from;
@@ -44,11 +42,11 @@ void SIPRouter::forwardMessage(const std::shared_ptr<SIPEndpoint>& from, const s
 		std::map<std::string, std::weak_ptr<SIPEndpoint>> epm;
 		epm[callID] = from;
 		m_endpointsMapByCallID[from->getUA()] = epm;
-		std::cout << "Record one callID: " << callID << " for UA: " << from->getUA() << std::endl;
 	}
 
 
 	auto target = message->getTarget();
+	//target = target.substr(4, target.length() - 4);
 
 	auto eps = m_endpoints.find(target);
 	if(eps != m_endpoints.end()) {
@@ -62,20 +60,27 @@ void SIPRouter::forwardMessage(const std::shared_ptr<SIPEndpoint>& from, const s
 
 void SIPRouter::forwardStatus(const std::shared_ptr<SIPEndpoint>& from, const std::shared_ptr<SIPMessage>& message)
 {
-	std::string ua;
+	std::string ua = message->getTarget();
 
 	
 	auto &head = message->getHeader();
 	auto callID = head["Call-ID"];
 
-	std::cout << "Call-ID: " << callID << " length:" << callID.length() <<std::endl;
+	auto it = m_endpointsMapByCallID.find(from->getUA());
+	if(it != m_endpointsMapByCallID.end()) {
+		it->second[callID] = from;
+	} else {
+		std::map<std::string, std::weak_ptr<SIPEndpoint>> epm;
+		epm[callID] = from;
+		m_endpointsMapByCallID[from->getUA()] = epm;
+	}
 
-	auto it = m_endpointsMapByCallID.find(ua);
+	auto eps = m_endpointsMapByCallID.find(ua);
 
-	if(it == m_endpointsMapByCallID.end()) {
+	if(eps == m_endpointsMapByCallID.end()) {
 		return;
 	} else {
-		auto &epm = it->second;
+		auto &epm = eps->second;
 		auto itep = epm.find(callID);
 		if(itep != epm.end()) {
 			auto destep = itep->second.lock();
@@ -98,7 +103,6 @@ void SIPRouter::forwardOutput(const std::shared_ptr<SIPEndpoint>& from, const st
 
 void SIPRouter::registerEndpoint(std::shared_ptr<SIPEndpoint> &ep)
 {
-	std::cout << "in SIPRouter::registerEndpoint " << ep->getUA() << std::endl;
 	if(!ep)
 		return;
 
@@ -106,7 +110,6 @@ void SIPRouter::registerEndpoint(std::shared_ptr<SIPEndpoint> &ep)
 	if(ua.length() <= 0)
 		return;
 
-	std::cout << "in SIPRouter::registerEndpoint store ep " << ep->getUA() << std::endl;
 	auto it = m_endpoints.find(ua);
 	if(it != m_endpoints.end()) {
 		it->second[ep.get()] = ep;

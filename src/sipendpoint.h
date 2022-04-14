@@ -19,7 +19,7 @@ public:
 	{
 		return m_ua;
 	}
-private:
+protected:
 	SIPRouter *m_router;
 	std::string m_ua;
 };

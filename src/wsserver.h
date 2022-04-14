@@ -47,7 +47,6 @@ public:
 	}
 	virtual ~wsSession()
 	{
-		std::cout << "ws session is closed" << std::endl;
 		if(m_endpoint) {
 			m_endpoint->onSessionClosed();
 		}
@@ -78,6 +77,7 @@ public:
 public:
 	void sendMessage(const char *msg, size_t len)
 	{
+		printf("ws send(%ld): %s\r\n", len, msg);
 		ws.async_write(boost::asio::buffer(msg, len),
 			[this](beast::error_code ec, std::size_t bytes_transferred)
 			{
@@ -118,6 +118,7 @@ private:
 		auto data = buffer_.data();
 		const char *mydata = (const char *)data.data();
 		size_t len = data.size();
+		printf("ws recive(%ld):%s", len, mydata);
 		auto sm = std::make_shared<SIPMessage>(mydata, len);
 		if(m_endpoint) {
 			m_endpoint->onMessage(sm);

@@ -41,18 +41,13 @@ public:
 		: socket_(std::move(socket))
 	{
 		m_endpoint = std::make_shared<sslEndpoint>(router, this);
-		printf("use count %ld\r\n", m_endpoint.use_count());
 	}
 
 	virtual ~sslSession()
 	{
-		std::cout << "ssl session is closed" << std::endl;
-		printf("use count %ld\r\n", m_endpoint.use_count());
 		if(m_endpoint) {
 			m_endpoint->onSessionClosed();
 		}
-		printf("use count %ld\r\n", m_endpoint.use_count());
-		std::cout << "ssl session is closed done" << std::endl;
 	}
 
 public:
@@ -94,11 +89,15 @@ private:
 			{
 				if (!ec)
 				{
-					auto sm = std::make_shared<SIPMessage>(data_, length);
-					if(m_endpoint) {
-						m_endpoint->onMessage(sm);
+					data_[length] = 0;
+					if(length == 4) {
+						sendMessage(data_, 4);
+					} else {
+						auto sm = std::make_shared<SIPMessage>(data_, length);
+						if(m_endpoint) {
+							m_endpoint->onMessage(sm);
+						}
 					}
-					//printf("data: %s\r\n", data_);
 					do_read();
 				}
 			}
@@ -117,7 +116,7 @@ private:
 	}
 
 	boost::asio::ssl::stream<tcp::socket> socket_;
-	char data_[2048];
+	char data_[2048 * 16];
 	std::shared_ptr<sslEndpoint> m_endpoint;
 };
 
