@@ -1,28 +1,44 @@
 #include "ubushandle.h"
-#include <core/servdcontext.h>
 
-
-void ubusASIOContextHandler::waitUBUSHandleEvent()
+ubusASIOContextHandler::ubusASIOContextHandler(boost::asio::io_context& context):
+	m_context(context), reactor_(boost::asio::use_service<boost::asio::detail::reactor>(context)),
+	m_gop(&ubusContext::getCommonContext(), g_ecode, handleEventForCommonContext),
+	m_sop(&servdContext::getInstance(), s_ecode, handleEventForServdContext)
 {
-	boost::asio::detail::reactor_op *op;
+	auto gContext = ubusContext::getCommonContext().getContext();
+	auto sContext = servdContext::getInstance().getContext();
 
-	auto handleEventForCommonContext = [] (void*, boost::asio::detail::scheduler_operation*,
-			const boost::system::error_code&, long unsigned int){
-		ubusContext::getCommonContext().handleEvent();
-	};
+	unsigned int fl;
+	fl = fcntl(gContext->sock.fd, F_GETFL, 0);
+	fl |= O_NONBLOCK;
+	fcntl(gContext->sock.fd, F_SETFL, fl);
 
-	auto handleEventForServdContext = [] (void*, boost::asio::detail::scheduler_operation*,
-			const boost::system::error_code&, long unsigned int){
-		servdContext::getInstance().handleEvent();
-	};
+	fl = fcntl(sContext->sock.fd, F_GETFL, 0);
+	fl |= O_NONBLOCK;
+	fcntl(sContext->sock.fd, F_SETFL, fl);
 
-	static boost::system::error_code g_ecode;
-	static boost::system::error_code s_ecode;
+	m_ubus_handle_global = gContext->sock.fd;
+	m_ubus_handle_server = sContext->sock.fd;
 
+	reactor_.register_descriptor(m_ubus_handle_global, m_global_data);
+	reactor_.register_descriptor(m_ubus_handle_server, m_server_data);
+}
 
-	descriptor_wait_op gop(g_ecode, handleEventForCommonContext);
-	descriptor_wait_op sop(s_ecode, handleEventForServdContext);
+void ubusASIOContextHandler::handleEventForCommonContext(void* notuse, boost::asio::detail::scheduler_operation*,
+		const boost::system::error_code&, long unsigned int)
+{
+}
 
-	reactor_.start_op(boost::asio::detail::reactor::read_op, m_ubus_handle_global, m_global_data, &gop, false, false);
-	reactor_.start_op(boost::asio::detail::reactor::read_op, m_ubus_handle_server, m_server_data, &sop, false, false);
+void ubusASIOContextHandler::handleEventForServdContext(void* THIS, boost::asio::detail::scheduler_operation*,
+	const boost::system::error_code&, long unsigned int)
+{
+};
+
+void ubusASIOContextHandler::waitUBUSHandleEventAsync()
+{
+	reactor_.start_op(boost::asio::detail::reactor::read_op, m_ubus_handle_global,
+			m_global_data, &m_gop, true, false);
+
+	reactor_.start_op(boost::asio::detail::reactor::read_op, m_ubus_handle_server,
+			m_server_data, &m_sop, true, false);
 }

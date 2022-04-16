@@ -18,6 +18,8 @@
 #include <thread>
 #include "wsserver.h"
 #include "sslserver.h"
+#include "ubushandle.h"
+#include "configure.h"
 
 
 void run(const char *pathname, unsigned short port)
@@ -27,6 +29,11 @@ void run(const char *pathname, unsigned short port)
 
 	wsServer ws(&router, io_context, pathname, port);
 	sslServer ssl(&router, io_context, 5080);
+
+	ubusASIOContextHandler g_handler(io_context);
+	g_handler.waitUBUSHandleEventAsync();
+
+	addConfigureService();
 
 	io_context.run();
 }
