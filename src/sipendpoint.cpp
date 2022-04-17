@@ -31,16 +31,13 @@ void SIPEndpoint::onMessage(const std::shared_ptr<SIPMessage>& message)
 	case sipRegister:
 		doRegister(message);
 		break;
+	case sipBye:
+	case sipACK:
+	case sipInvalid:
+		m_router->forwardStatus(shared_from_this(), message);
+		break;
 	default:
-		if(message->getMethod().length()) {
-			printf("call router forwardMessage\r\n");
-			m_router->forwardMessage(shared_from_this(), message);
-			printf("call router forwardMessage done\r\n");
-		} else {
-			printf("call router forwardStatus\r\n");
-			m_router->forwardStatus(shared_from_this(), message);
-			printf("call router forwardStatus done\r\n");
-		}
+		m_router->forwardMessage(shared_from_this(), message);
 		break;
 	}
 }

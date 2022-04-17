@@ -25,7 +25,7 @@
 void run(const char *pathname, unsigned short port)
 {
 	boost::asio::io_context io_context;
-	SIPRouter router("main");
+	SIPRouter router(io_context, "main");
 
 	wsServer ws(&router, io_context, pathname, port);
 	sslServer ssl(&router, io_context, 5080);

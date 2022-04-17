@@ -3,9 +3,10 @@
 #include "siprouter.h"
 #include "sipendpoint.h"
 #include "sipmessage.h"
+#include "callid.h"
 
-SIPRouter::SIPRouter(const std::string realm):
-  m_realm(realm)
+SIPRouter::SIPRouter(boost::asio::io_context &context, const std::string realm):
+  m_realm(realm), m_context(context)
 {
 }
 
@@ -35,18 +36,9 @@ void SIPRouter::forwardMessage(const std::shared_ptr<SIPEndpoint>& from, const s
 	auto &head = message->getHeader();
 	auto callID = head["Call-ID"];
 
-	auto it = m_endpointsMapByCallID.find(from->getUA());
-	if(it != m_endpointsMapByCallID.end()) {
-		it->second[callID] = from;
-	} else {
-		std::map<std::string, std::weak_ptr<SIPEndpoint>> epm;
-		epm[callID] = from;
-		m_endpointsMapByCallID[from->getUA()] = epm;
-	}
-
+	addEndpointIntoCallID(callID.c_str(), from);
 
 	auto target = message->getTarget();
-	//target = target.substr(4, target.length() - 4);
 
 	auto eps = m_endpoints.find(target);
 	if(eps != m_endpoints.end()) {
@@ -66,28 +58,12 @@ void SIPRouter::forwardStatus(const std::shared_ptr<SIPEndpoint>& from, const st
 	auto &head = message->getHeader();
 	auto callID = head["Call-ID"];
 
-	auto it = m_endpointsMapByCallID.find(from->getUA());
-	if(it != m_endpointsMapByCallID.end()) {
-		it->second[callID] = from;
-	} else {
-		std::map<std::string, std::weak_ptr<SIPEndpoint>> epm;
-		epm[callID] = from;
-		m_endpointsMapByCallID[from->getUA()] = epm;
-	}
+	addEndpointIntoCallID(callID.c_str(), from);
 
-	auto eps = m_endpointsMapByCallID.find(ua);
+	auto toep = findEndpointByCallID(callID.c_str(), ua.c_str());
 
-	if(eps == m_endpointsMapByCallID.end()) {
-		return;
-	} else {
-		auto &epm = eps->second;
-		auto itep = epm.find(callID);
-		if(itep != epm.end()) {
-			auto destep = itep->second.lock();
-			if(destep) {
-				destep->sendMessage(message);
-			}
-		}
+	if(toep) {
+		toep->sendMessage(message);
 	}
 }
 
@@ -119,3 +95,43 @@ void SIPRouter::registerEndpoint(std::shared_ptr<SIPEndpoint> &ep)
 		m_endpoints[ua] = epm;
 	}
 }
+
+void SIPRouter::removeCallID(const std::string& id)
+{
+	auto it = m_callIDs.find(id);
+
+	if(it != m_callIDs.end()) {
+		m_callIDs.erase(it);
+	}
+}
+
+std::shared_ptr<SIPEndpoint> SIPRouter::findEndpointByCallID(const char *id, const char *ua)
+{
+	std::shared_ptr<SIPEndpoint> invalid;
+
+	auto it = m_callIDs.find(id);
+	if(it == m_callIDs.end()) {
+		return invalid;
+	}
+
+	auto &pid = it->second;
+	if(pid)
+		return pid->findEndpoint(ua);
+
+	return invalid;
+}
+
+void SIPRouter::addEndpointIntoCallID(const char *id, const std::shared_ptr<SIPEndpoint>& from)
+{
+	auto it = m_callIDs.find(id);
+	if(it == m_callIDs.end()) {
+		auto ptr = std::make_shared<callID>(m_context, id, this);
+		if(ptr) {
+			ptr->addEndpoint(from);
+			m_callIDs[id] = ptr;
+		}
+	} else {
+		it->second->addEndpoint(from);
+	}
+}
+
