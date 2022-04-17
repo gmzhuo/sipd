@@ -65,6 +65,9 @@ void SIPRouter::forwardStatus(const std::shared_ptr<SIPEndpoint>& from, const st
 	if(toep) {
 		toep->sendMessage(message);
 	}
+
+	//todo
+	//We should monitor the callID status by the message status.
 }
 
 void SIPRouter::forwardOutput(const std::shared_ptr<SIPEndpoint>& from, const std::shared_ptr<SIPMessage>& message)
