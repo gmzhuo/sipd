@@ -24,8 +24,8 @@ class sslSession;
 
 class sslEndpoint:public SIPEndpoint {
 public:
-	sslEndpoint(SIPRouter *router, sslSession* session)
-		:SIPEndpoint(router), m_sslSession(session)
+	sslEndpoint(boost::asio::io_context &context, SIPRouter *router, sslSession* session)
+		:SIPEndpoint(context, router), m_sslSession(session)
 	{
 	}
 protected:
@@ -37,16 +37,16 @@ protected:
 class sslSession : public std::enable_shared_from_this<sslSession>
 {
 public:
-	sslSession(SIPRouter *router, boost::asio::ssl::stream<tcp::socket> socket)
-		: socket_(std::move(socket))
+	sslSession(boost::asio::io_context& context, SIPRouter *router, boost::asio::ssl::stream<tcp::socket> socket)
+		: socket_(std::move(socket)), m_context(context)
 	{
-		m_endpoint = std::make_shared<sslEndpoint>(router, this);
+		m_endpoint = std::make_shared<sslEndpoint>(m_context, router, this);
 	}
 
 	virtual ~sslSession()
 	{
 		if(m_endpoint) {
-			m_endpoint->onSessionClosed();
+			m_endpoint->onEndpointClosed();
 		}
 	}
 
@@ -118,6 +118,7 @@ private:
 	boost::asio::ssl::stream<tcp::socket> socket_;
 	char data_[2048 * 16];
 	std::shared_ptr<sslEndpoint> m_endpoint;
+	boost::asio::io_context& m_context;
 };
 
 class sslServer
@@ -126,7 +127,7 @@ public:
 	sslServer(SIPRouter *router, boost::asio::io_context& io_context, unsigned short port)
 		: acceptor_(io_context, tcp::endpoint(tcp::v4(), port)),
 		context_(boost::asio::ssl::context::sslv23),
-		m_router(router)
+		m_router(router), m_context(io_context)
 	{
 		context_.set_options(
 			boost::asio::ssl::context::default_workarounds
@@ -154,7 +155,7 @@ private:
 				if (!error)
 				{
 					std::make_shared<sslSession>(
-						m_router,
+						m_context, m_router,
 						boost::asio::ssl::stream<tcp::socket>(
 							std::move(socket), context_))->start();
 				}
@@ -166,4 +167,5 @@ private:
 	tcp::acceptor acceptor_;
 	boost::asio::ssl::context context_;
 	SIPRouter *m_router;
+	boost::asio::io_context& m_context;
 };

@@ -178,7 +178,6 @@ SIPMessage::SIPMessage(const char *data, size_t length)
 				}
 			}
 		}
-		printf("message target %s\r\n", m_target.c_str());
 	} catch(...) {
 	}
 }

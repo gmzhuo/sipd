@@ -26,8 +26,8 @@ class wsSession;
 
 class wsEndpoint:public SIPEndpoint {
 public:
-	wsEndpoint(SIPRouter *router, wsSession* session)
-		:SIPEndpoint(router), m_wsSession(session)
+	wsEndpoint(boost::asio::io_context &context, SIPRouter *router, wsSession* session)
+		:SIPEndpoint(context, router), m_wsSession(session)
 	{
 	}
 protected:
@@ -40,15 +40,15 @@ class wsSession
 	: public std::enable_shared_from_this<wsSession>
 {
 public:
-	wsSession(SIPRouter *router, tcp::socket socket)
-		: ws(std::move(socket))
+	wsSession(boost::asio::io_context& context, SIPRouter *router, tcp::socket socket)
+		: ws(std::move(socket)), m_context(context)
 	{
-		m_endpoint = std::make_shared<wsEndpoint>(router, this);
+		m_endpoint = std::make_shared<wsEndpoint>(m_context, router, this);
 	}
 	virtual ~wsSession()
 	{
 		if(m_endpoint) {
-			m_endpoint->onSessionClosed();
+			m_endpoint->onEndpointClosed();
 		}
 	}
 public:
@@ -77,7 +77,6 @@ public:
 public:
 	void sendMessage(const char *msg, size_t len)
 	{
-		printf("ws send(%ld): %s\r\n", len, msg);
 		ws.async_write(boost::asio::buffer(msg, len),
 			[this](beast::error_code ec, std::size_t bytes_transferred)
 			{
@@ -118,7 +117,6 @@ private:
 		auto data = buffer_.data();
 		const char *mydata = (const char *)data.data();
 		size_t len = data.size();
-		printf("ws recive(%ld):%s", len, mydata);
 		auto sm = std::make_shared<SIPMessage>(mydata, len);
 		if(m_endpoint) {
 			m_endpoint->onMessage(sm);
@@ -143,13 +141,15 @@ private:
 	websocket::stream<tcp::socket> ws;
 	beast::flat_buffer buffer_;
 	std::shared_ptr<wsEndpoint> m_endpoint;
+	boost::asio::io_context& m_context;
 };
 
 class wsServer
 {
 public:
 	wsServer(SIPRouter *router, boost::asio::io_context& io_context, const char *pathname, unsigned short port)
-	 : acceptor_(io_context, tcp::endpoint(net::ip::make_address(pathname), port)), m_router(router)
+	 : acceptor_(io_context, tcp::endpoint(net::ip::make_address(pathname), port)), m_router(router),
+	 m_context(io_context)
 	{
 		do_accept();
 	}
@@ -162,7 +162,7 @@ private:
 			{
 				if (!ec)
 				{
-					std::make_shared<wsSession>(m_router, std::move(socket))->start();
+					std::make_shared<wsSession>(m_context, m_router, std::move(socket))->start();
 				}
 
 				do_accept();
@@ -171,5 +171,6 @@ private:
 
 	tcp::acceptor acceptor_;
 	SIPRouter *m_router;
+	boost::asio::io_context& m_context;
 };
 

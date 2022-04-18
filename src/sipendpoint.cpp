@@ -6,9 +6,10 @@
 #include "sipendpoint.h"
 #include "sipmessage.h"
 #include "sqlite3.h"
+#include "callid.h"
 
-SIPEndpoint::SIPEndpoint(SIPRouter *router):
-	m_router(router)
+SIPEndpoint::SIPEndpoint(boost::asio::io_context &context, SIPRouter *router):
+	m_router(router), m_context(context)
 {
 }
 
@@ -16,10 +17,10 @@ SIPEndpoint::~SIPEndpoint()
 {
 }
 
-void SIPEndpoint::onSessionClosed()
+void SIPEndpoint::onEndpointClosed()
 {
 	auto THIS = shared_from_this();
-	m_router->onSessionClosed(THIS);
+	m_router->onEndpointClosed(THIS);
 }
 
 void SIPEndpoint::onMessage(const std::shared_ptr<SIPMessage>& message)
@@ -109,7 +110,7 @@ void SIPEndpoint::doRegister(const std::shared_ptr<SIPMessage>& message)
 		resp = makeAuthorizeResponse();
 	}
 
-	this->sendMessage(resp);
+	this->forwardMessage(resp);
 }
 
 bool SIPEndpoint::checkAuthorize(const std::shared_ptr<SIPMessage>& message)
@@ -178,5 +179,41 @@ bool SIPEndpoint::checkAuthorize(const std::shared_ptr<SIPMessage>& message)
 	}
 
 	return false;
+}
+
+void SIPEndpoint::removeCallID(const std::string& id)
+{
+	printf("remove call ID %s ua %s\r\n", id.c_str(), m_ua.c_str());
+	auto it = m_callIDs.find(id);
+
+	if(it != m_callIDs.end()) {
+		m_callIDs.erase(it);
+	}
+}
+
+bool SIPEndpoint::haveCallID(const std::string& id) const
+{
+	auto it = m_callIDs.find(id);
+
+	if(it != m_callIDs.end()) {
+		return true;
+	}
+
+	return false;
+}
+
+void SIPEndpoint::addCallID(const std::string& id)
+{
+	printf("add call ID %s ua %s\r\n", id.c_str(), m_ua.c_str());
+	auto it = m_callIDs.find(id);
+	if(it == m_callIDs.end()) {
+		m_callIDs[id] = std::make_shared<callID>(m_context, id.c_str(), this);
+	}
+}
+
+int SIPEndpoint::forwardMessage(const std::shared_ptr<SIPMessage>& message)
+{
+	printf("ep %s send:\r\n%s", m_ua.c_str(), message->getMessage().c_str());
+	return sendMessage(message);
 }
 

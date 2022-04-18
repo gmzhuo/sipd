@@ -6,23 +6,19 @@
 
 
 class SIPEndpoint;
-class SIPRouter;
+class SIPEndpoint;
 
 class callID{
 public:
-	callID(boost::asio::io_context &context, const char *id, SIPRouter *router);
+	callID(boost::asio::io_context &context, const char *id, SIPEndpoint *ep);
 	virtual ~callID() = default;
 public:
-	void addEndpoint(const std::shared_ptr<SIPEndpoint> ep);
-	void removeEndpoint(const char *ua);
-	std::shared_ptr<SIPEndpoint> findEndpoint(const char *ua);
 	void onConfirmed();
 	void onUpdate();
 protected:
 	void onExpired();
 protected:
-	std::map<std::string, std::weak_ptr<SIPEndpoint>> m_eps;
 	std::string m_ID;
-	SIPRouter *m_router;
+	SIPEndpoint *m_ep;
 	boost::asio::steady_timer m_timer;
 };
