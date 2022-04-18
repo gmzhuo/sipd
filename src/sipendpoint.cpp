@@ -38,7 +38,7 @@ void SIPEndpoint::onBuffer(const char *buf, size_t length)
 		int status;
 		char errbuf[2048];
 
-		const char *patten = "SIP/(.*) (d+) (.*)";
+		const char *patten = "SIP/(.+) (.+) (.+)";
 		status = regcomp(&m_statusRegex, patten, REG_EXTENDED);
 		if(status < 0) {
 			regerror(status, &m_statusRegex, errbuf, sizeof(errbuf));
@@ -95,7 +95,7 @@ void SIPEndpoint::onBuffer(const char *buf, size_t length)
 				err = regexec(&m_statusRegex, line, 20, match, 0);
 				if(err == 0) {
 					std::string version(&line[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
-					std::string reason(&line[match[3].rm_so], match[3].rm_eo - match[3].rm_so);
+					std::string reason(&line[match[3].rm_so], match[3].rm_eo - match[3].rm_so - 1);
 					std::string status(&line[match[2].rm_so], match[2].rm_eo - match[2].rm_so);
 
 					printf("version %s reason %s status %s\r\n", version.c_str(), reason.c_str(), status.c_str());

@@ -205,7 +205,7 @@ std::string SIPMessage::toString() const
 
 	//printf("SIP %s %d %s\r\n",  m_status, m_reason.c_str());
 	if(m_method.length()) {
-		os << m_method << " " << m_target << " SIP/" << m_version << " \r\n";
+		os << m_method << " sip:" << m_target << " SIP/" << m_version << "\n";
 	} else {
 		os << "SIP/" << "2.0" << " " << m_status << " " << m_reason << "\r\n";
 	}

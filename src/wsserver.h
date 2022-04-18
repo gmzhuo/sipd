@@ -77,10 +77,10 @@ public:
 public:
 	void sendMessage(const char *msg, size_t len)
 	{
-		ws.async_write(boost::asio::buffer(msg, len),
-			[this](beast::error_code ec, std::size_t bytes_transferred)
-			{
-			});
+		ws.write(boost::asio::buffer(msg, len));
+		//	[this](beast::error_code ec, std::size_t bytes_transferred)
+		//	{
+		//	});
 	}
 private:
 	void
