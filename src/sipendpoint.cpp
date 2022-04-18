@@ -11,6 +11,7 @@
 SIPEndpoint::SIPEndpoint(boost::asio::io_context &context, SIPRouter *router):
 	m_router(router), m_context(context)
 {
+	m_pendingMessage = std::make_shared<SIPMessage>();
 }
 
 SIPEndpoint::~SIPEndpoint()
@@ -23,11 +24,140 @@ void SIPEndpoint::onEndpointClosed()
 	m_router->onEndpointClosed(THIS);
 }
 
+void SIPEndpoint::onBuffer(const char *buf, size_t length)
+{
+	char line[1024];
+	char content[8192];
+
+	static std::once_flag init_regex_flag;
+	static regex_t m_statusRegex;
+	static regex_t m_cmdlineRegex;
+	static regex_t m_headlineRegex;
+	static regex_t m_fromRegex;
+	std::call_once(init_regex_flag, [](){
+		int status;
+		char errbuf[2048];
+
+		const char *patten = "SIP/(.*) (d+) (.*)";
+		status = regcomp(&m_statusRegex, patten, REG_EXTENDED);
+		if(status < 0) {
+			regerror(status, &m_statusRegex, errbuf, sizeof(errbuf));
+			printf("compile %s %d %s\r\n", patten, status, errbuf);
+		}
+
+		patten = "(.+) (.+) SIP/(.+)";
+		status = regcomp(&m_cmdlineRegex, patten, REG_EXTENDED);
+		if(status < 0) {
+			regerror(status, &m_cmdlineRegex, errbuf, sizeof(errbuf));
+			printf("compile %s %d %s\r\n", patten, status, errbuf);
+		}
+
+		patten = "(.+): (.*)";
+		status = regcomp(&m_headlineRegex, patten, REG_EXTENDED);
+		if(status < 0) {
+			regerror(status, &m_headlineRegex, errbuf, sizeof(errbuf));
+			printf("compile %s %d %s\r\n", patten, status, errbuf);
+		}
+
+		patten = "<sip:(.+@.+)>";
+		status = regcomp(&m_fromRegex, patten, REG_EXTENDED);
+		if(status < 0) {
+			regerror(status, &m_fromRegex, errbuf, sizeof(errbuf));
+		}
+	});
+
+	std::string value(buf, length);
+	std::istringstream is(value);
+
+	while(!is.eof()) {
+		switch(m_parseState) {
+		case messageParseStateFirstLine:
+			is.getline(line, sizeof(line));
+			if(strlen(line) <= 1) {
+				continue;
+			}
+
+			m_parseState = messageParseStateHeads;
+
+			do {
+				regmatch_t match[20];
+				auto err = regexec(&m_cmdlineRegex, line, 20, match, 0);
+				if(err == 0) {
+					std::string method(&line[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
+					std::string version(&line[match[3].rm_so], match[3].rm_eo - match[3].rm_so);
+					std::string target(&line[match[2].rm_so], match[2].rm_eo - match[2].rm_so);
+
+					printf("method %s version %s target %s\r\n", method.c_str(), version.c_str(), target.c_str());
+					m_pendingMessage->setMethod(method, version, target);
+					break;
+				}
+
+				err = regexec(&m_statusRegex, line, 20, match, 0);
+				if(err == 0) {
+					std::string version(&line[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
+					std::string reason(&line[match[3].rm_so], match[3].rm_eo - match[3].rm_so);
+					std::string status(&line[match[2].rm_so], match[2].rm_eo - match[2].rm_so);
+
+					printf("version %s reason %s status %s\r\n", version.c_str(), reason.c_str(), status.c_str());
+					m_pendingMessage->setStatus(version, status, reason);
+				}
+			}while(false);
+
+			break;
+		case messageParseStateHeads:
+			is.getline(line, sizeof(line));
+			if(strlen(line) <= 1) {
+				m_pendingMessage->addContent(buf, 0);
+				this->onMessage(m_pendingMessage);
+				m_pendingMessage = std::make_shared<SIPMessage>();
+				m_parseState = messageParseStateFirstLine;
+			} else {
+				regmatch_t match[20];
+				auto err = regexec(&m_headlineRegex, line, 20, match, 0);
+				if(err == 0) {
+					std::string head(&line[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
+					std::string value(&line[match[2].rm_so], match[2].rm_eo - match[2].rm_so - 1);
+					if(head == "Content-Length") {
+						m_parseState = messageParseStateContent;
+						m_contentLength = atoi(value.c_str());
+						if(m_contentLength == 0) {
+							is.getline(line, sizeof(line));
+							m_pendingMessage->addContent(buf, 0);
+							this->onMessage(m_pendingMessage);
+							m_pendingMessage = std::make_shared<SIPMessage>();
+							m_parseState = messageParseStateFirstLine;
+						}
+						continue;
+					}
+				}
+				m_pendingMessage->addLine(line);
+			}
+			break;
+		case messageParseStateContent:
+			length = is.readsome(content, (m_contentLength >= sizeof(content))?(sizeof(content) - 1):m_contentLength);
+			content[length] = 0;
+			if(length > 0) {
+				content[length] = 0;
+				m_pendingMessage->addContent(content, length);
+				m_contentLength -= length;
+				if(m_contentLength == 0) {
+					m_pendingMessage->addContent(content, 0);
+					this->onMessage(m_pendingMessage);
+					m_pendingMessage = std::make_shared<SIPMessage>();
+					m_parseState = messageParseStateFirstLine;
+					is.getline(line, sizeof(line));
+				}
+			}
+			break;
+		}
+	};
+}
+
 void SIPEndpoint::onMessage(const std::shared_ptr<SIPMessage>& message)
 {
 	auto type = message->getTypeString();
 
-	printf("ep %s recive:\r\n%s", m_ua.c_str(), message->getMessage().c_str());
+	printf("ep %s recive:\r\n\t%s", m_ua.c_str(), message->getMessage().c_str());
 	auto &head = message->getHeader();
 	auto callID = head["Call-ID"];
 
@@ -213,7 +343,7 @@ void SIPEndpoint::addCallID(const std::string& id)
 
 int SIPEndpoint::forwardMessage(const std::shared_ptr<SIPMessage>& message)
 {
-	printf("ep %s send:\r\n%s", m_ua.c_str(), message->getMessage().c_str());
+	printf("ep %s send:\r\n\t%s", m_ua.c_str(), message->getMessage().c_str());
 	return sendMessage(message);
 }
 

@@ -115,13 +115,11 @@ private:
 			return;
 
 		auto data = buffer_.data();
-		const char *mydata = (const char *)data.data();
-		size_t len = data.size();
-		auto sm = std::make_shared<SIPMessage>(mydata, len);
 		if(m_endpoint) {
-			m_endpoint->onMessage(sm);
+			m_endpoint->onBuffer((const char *)data.data(), data.size());
 		}
-		buffer_.consume(len);
+
+		buffer_.consume(data.size());
 		do_read();
 	}
 

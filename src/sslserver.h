@@ -65,7 +65,6 @@ public:
 			}
 		);
 	}
-
 private:
 	void do_handshake()
 	{
@@ -93,9 +92,9 @@ private:
 					if(length == 4) {
 						sendMessage(data_, 4);
 					} else {
-						auto sm = std::make_shared<SIPMessage>(data_, length);
+						//auto sm = std::make_shared<SIPMessage>(data_, length);
 						if(m_endpoint) {
-							m_endpoint->onMessage(sm);
+							m_endpoint->onBuffer(data_, length);
 						}
 					}
 					do_read();

@@ -6,5 +6,6 @@ int wsEndpoint::sendMessage(const std::shared_ptr<SIPMessage>& message)
 
 	m_wsSession->sendMessage(msg.c_str(), msg.length());
 
-	return 0;
+	return msg.length();
 }
+

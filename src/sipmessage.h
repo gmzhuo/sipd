@@ -28,10 +28,15 @@ public:
 class SIPMessage{
 public:
 	SIPMessage();
-	SIPMessage(const char *data, size_t length);
 	virtual ~SIPMessage();
-private:
+public:
 	std::string toString() const;
+	void setMethod(const std::string& method, const std::string& version,
+			const std::string& target);
+	void setStatus(const std::string& version, const std::string& status,
+			const std::string& reason);
+	void addLine(const char *line);
+	void addContent(const char *content, size_t length);
 public:
 	std::shared_ptr<SIPMessage> makeResponse(unsigned short status, const char *reason,
 		const char *extension, const char *content, unsigned int timeout = 600,

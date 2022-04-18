@@ -1,7 +1,14 @@
 #pragma once
 #include "siprouter.h"
+#include <boost/asio/ip/tcp.hpp>
 
 class SIPMessage;
+
+typedef enum sipMessageParseState{
+	messageParseStateFirstLine,
+	messageParseStateHeads,
+	messageParseStateContent
+} sipMessageParseState;
 
 class SIPEndpoint: public std::enable_shared_from_this<SIPEndpoint> {
 public:
@@ -15,6 +22,7 @@ public:
 	void removeCallID(const std::string& id);
 	void addCallID(const std::string& id);
 	void onEndpointClosed();
+	void onBuffer(const char *buf, size_t length);
 	void onMessage(const std::shared_ptr<SIPMessage>& message);
 protected:
 	bool checkAuthorize(const std::shared_ptr<SIPMessage>& message);
@@ -30,4 +38,7 @@ protected:
 	std::string m_nonce;
 	std::map<std::string, std::shared_ptr<callID>> m_callIDs;
 	boost::asio::io_context& m_context;
+	sipMessageParseState m_parseState = messageParseStateFirstLine;
+	std::shared_ptr<SIPMessage> m_pendingMessage;
+	size_t m_contentLength;
 };

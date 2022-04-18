@@ -74,33 +74,35 @@ SIPMessage::SIPMessage()
 {
 }
 
-SIPMessage::SIPMessage(const char *data, size_t length)
+void SIPMessage::setMethod(const std::string& method, const std::string& version,
+			const std::string& target)
 {
-	m_message = std::string(data, length);
+	m_method = method;
+	m_version = version;
+	m_target = target;
+
+	m_type = getMessageType(method.c_str());
+}
+
+void SIPMessage::setStatus(const std::string& version, const std::string& status,
+			const std::string& reason)
+{
+	m_status = atoi(status.c_str());
+	m_reason = reason;
+	m_version = version;
+}
+
+void SIPMessage::addLine(const char *line)
+{
 	static std::once_flag init_regex_flag;
-	static regex_t m_statusRegex;
-	static regex_t m_cmdlineRegex;
 	static regex_t m_headlineRegex;
 	static regex_t m_fromRegex;
+
 	std::call_once(init_regex_flag, [](){
 		int status;
 		char errbuf[2048];
 
-		const char *patten = "SIP/(d+.d+) (d+) (.*)";
-		status = regcomp(&m_statusRegex, patten, REG_EXTENDED);
-		if(status < 0) {
-			regerror(status, &m_statusRegex, errbuf, sizeof(errbuf));
-			printf("compile %s %d %s\r\n", patten, status, errbuf);
-		}
-
-		patten = "(.+) (.+) SIP/(.+)";
-		status = regcomp(&m_cmdlineRegex, patten, REG_EXTENDED);
-		if(status < 0) {
-			regerror(status, &m_cmdlineRegex, errbuf, sizeof(errbuf));
-			printf("compile %s %d %s\r\n", patten, status, errbuf);
-		}
-
-		patten = "(.+): (.*)";
+		const char *patten = "(.+): (.*)";
 		status = regcomp(&m_headlineRegex, patten, REG_EXTENDED);
 		if(status < 0) {
 			regerror(status, &m_headlineRegex, errbuf, sizeof(errbuf));
@@ -114,71 +116,42 @@ SIPMessage::SIPMessage(const char *data, size_t length)
 		}
 	});
 
-	m_type = sipInvalid;
-
-	std::string value(data, length);
-	std::istringstream is(value);
-
-	try {
-		char line[1024];
-		is.getline(line, sizeof(line));
-		bool isStatus = false;
-
-		do {
-			regmatch_t match[20];
-			auto err = regexec(&m_cmdlineRegex, line, 20, match, 0);
-			if(err == 0) {
-				std::string method(&line[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
-				m_method = method;
-				std::string version(&line[match[3].rm_so], match[3].rm_eo - match[3].rm_so);
-				m_version = version;
-				std::string target(&line[match[2].rm_so], match[2].rm_eo - match[2].rm_so);
-				m_target = target;
-				m_type = getMessageType(method.c_str());
-				break;
-			}
-
-			isStatus = true;
-			err = regexec(&m_statusRegex, line, 20, match, 0);
-			if(err == 0) {
-				printf("status message %s\r\n", data);
-			}
-			
-		}while(false);
-
-		while(!is.eof()) {
-			is.getline(line, sizeof(line));
-
-			size_t len = strlen(line);
-			if(len) {
-				regmatch_t match[20];
-				auto err = regexec(&m_headlineRegex, line, 20, match, 0);
-				if(err == 0) {
-					std::string head(&line[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
-					std::string value(&line[match[2].rm_so], match[2].rm_eo - match[2].rm_so - 1);
-					m_headers[head.c_str()] = value.c_str();
-					if(isStatus) {
-						if(head == "From") {
-							auto err = regexec(&m_fromRegex, line, 20, match, 0);
-							if(err == 0) {
-								std::string UA(&line[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
-								m_target = UA;
-							}
-						}
-					} else {
-						if(head == "To") {
-							auto err = regexec(&m_fromRegex, line, 20, match, 0);
-							if(err == 0) {
-								std::string UA(&line[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
-								m_target = UA;
-							}
-						} 
+	size_t len = strlen(line);
+	if(len) {
+		regmatch_t match[20];
+		auto err = regexec(&m_headlineRegex, line, 20, match, 0);
+		if(err == 0) {
+			std::string head(&line[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
+			std::string value(&line[match[2].rm_so], match[2].rm_eo - match[2].rm_so - 1);
+			m_headers[head.c_str()] = value.c_str();
+			if(m_method.length() == 0) {
+				if(head == "From") {
+					auto err = regexec(&m_fromRegex, line, 20, match, 0);
+					if(err == 0) {
+						std::string UA(&line[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
+						m_target = UA;
 					}
-				} else {
 				}
+			} else {
+				if(head == "To") {
+					auto err = regexec(&m_fromRegex, line, 20, match, 0);
+					if(err == 0) {
+						std::string UA(&line[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
+						m_target = UA;
+					}
+				} 
 			}
+		} else {
 		}
-	} catch(...) {
+	}
+}
+
+void SIPMessage::addContent(const char *content, size_t length)
+{
+	if(length == 0) {
+		m_message = this->toString();
+	} else {
+		m_content += content;
 	}
 }
 
