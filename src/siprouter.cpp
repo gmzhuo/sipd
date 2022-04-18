@@ -4,6 +4,7 @@
 #include "sipendpoint.h"
 #include "sipmessage.h"
 #include "callid.h"
+#include "sqlite3.h"
 
 SIPRouter::SIPRouter(boost::asio::io_context &context, const std::string realm):
   m_realm(realm), m_context(context)
@@ -46,6 +47,12 @@ void SIPRouter::forwardMessage(const std::shared_ptr<SIPEndpoint>& from, const s
 			auto &dest = it->second;
 			dest->sendMessage(message);
 		}
+	}
+
+	auto devices = sqlite3DB::getInstance().getUserDevice(target.c_str());
+
+	for(auto it = devices.begin(); it != devices.end(); ++it) {
+		//based on the device id to wakeup the device.
 	}
 }
 

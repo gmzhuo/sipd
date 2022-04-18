@@ -4,10 +4,10 @@ set(CMAKE_VERBOSE_MAKEFILE off)
 PROJECT(sipd)
 
 add_executable(sipd main.cpp siprouter.cpp sipmessage.cpp sslserver.cpp wsserver.cpp
-		sipendpoint.cpp ubushandle.cpp configure.cpp callid.cpp)
+		sipendpoint.cpp ubushandle.cpp configure.cpp callid.cpp sqlite3.cpp)
 
 TARGET_LINK_LIBRARIES(sipd crypto)
-TARGET_LINK_LIBRARIES(sipd ssl service curl ev)
+TARGET_LINK_LIBRARIES(sipd ssl service curl ev sqlite3)
 
 install(TARGETS sipd
 		ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}

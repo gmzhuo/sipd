@@ -25,16 +25,23 @@
 void run(const char *pathname, unsigned short port)
 {
 	boost::asio::io_context io_context;
-	SIPRouter router(io_context, "main");
+	printf("to init router\r\n");
+	SIPRouter router(io_context, "mtlink.cn");
 
+	printf("to ws server\r\n");
 	wsServer ws(&router, io_context, pathname, port);
+
+	printf("to ssl server\r\n");
 	sslServer ssl(&router, io_context, 5080);
 
+	printf("to int ubus handle\r\n");
 	ubusASIOContextHandler g_handler(io_context);
 	g_handler.waitUBUSHandleEventAsync();
 
+	printf("to add configure service\r\n");
 	addConfigureService();
 
+	printf("to run loop\r\n");
 	io_context.run();
 }
 
@@ -43,6 +50,7 @@ int main(int argc, char* argv[])
 {
     try
     {
+		printf("in main to run\r\n");
 		run(argv[1], (unsigned short)atoi(argv[2]));
     }
     catch (const std::exception & e)

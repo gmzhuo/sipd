@@ -13,6 +13,7 @@ public:
 	void onSessionClosed();
 	void onMessage(const std::shared_ptr<SIPMessage>& message);
 protected:
+	bool checkAuthorize(const std::shared_ptr<SIPMessage>& message);
 	void doRegister(const std::shared_ptr<SIPMessage>& message);
 public:
 	const std::string& getUA() const
@@ -22,4 +23,5 @@ public:
 protected:
 	SIPRouter *m_router;
 	std::string m_ua;
+	std::string m_nonce;
 };

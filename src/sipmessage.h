@@ -34,7 +34,8 @@ private:
 	std::string toString() const;
 public:
 	std::shared_ptr<SIPMessage> makeResponse(unsigned short status, const char *reason,
-		const char *extension, const char *content) const;
+		const char *extension, const char *content,
+		std::map<std::string, std::string> extraHeades=std::map<std::string, std::string>()) const;
 	SIPMessageType getType() const {
 		return m_type;
 	}

@@ -18,6 +18,10 @@ public:
 protected:
 	void forwardOutput(const std::shared_ptr<SIPEndpoint>& from, const std::shared_ptr<SIPMessage>& message);
 public:
+	const std::string& getRealm() const
+	{
+		return m_realm;
+	}
 	void onSessionClosed(std::shared_ptr<SIPEndpoint>& ep);
 	void removeCallID(const std::string& id);
 public:
