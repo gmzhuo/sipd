@@ -87,12 +87,12 @@ void SIPEndpoint::doRegister(const std::shared_ptr<SIPMessage>& message)
 		}
 		sprintf(auvalue, "Digest realm=\"%s\", nonce=\"%s\", algorithm=MD5", m_router->getRealm().c_str(), m_nonce.c_str());
 		extraHeades["WWW-Authenticate"] =  auvalue;
-		auto resp = message->makeResponse(401, "Unauthorized", "", "", extraHeades);
+		auto resp = message->makeResponse(401, "Unauthorized", "", "", 1, extraHeades);
 		return resp;
 	};
 
 	auto makeAuthorizedResponse = [this, message]() {
-		auto resp = message->makeResponse(200, "OK", "", "");
+		auto resp = message->makeResponse(200, "OK", "", "", 600);
 		return resp;
 	};
 

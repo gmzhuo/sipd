@@ -189,8 +189,10 @@ SIPMessage::~SIPMessage()
 
 std::shared_ptr<SIPMessage> SIPMessage::makeResponse(
 	unsigned short status, const char *reason, const char *extension, const char *content,
-	std::map<std::string, std::string> extraHeades) const
+	unsigned int timeout, std::map<std::string, std::string> extraHeades) const
 {
+	char expires[64];
+	sprintf(expires, "expires=%d", timeout);
 	auto result = std::make_shared<SIPMessage>();
 	result->m_status = status;
 	result->m_reason = reason;
@@ -201,7 +203,7 @@ std::shared_ptr<SIPMessage> SIPMessage::makeResponse(
 	result->m_headers["From"] = this->m_headers["From"];
 	result->m_headers["Call-ID"] = this->m_headers["Call-ID"];
 	result->m_headers["CSeq"] = this->m_headers["CSeq"];
-	result->m_headers["Contact"] = this->m_headers["Contact"];
+	result->m_headers["Contact"] = this->m_headers["Contact"] + ";" + expires;
 
 	for(auto it = extraHeades.begin(); it != extraHeades.end(); ++it) {
 		result->m_headers[it->first.c_str()] = it->second;
