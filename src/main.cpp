@@ -20,13 +20,16 @@
 #include "sslserver.h"
 #include "ubushandle.h"
 #include "configure.h"
+#include "sqlite3.h"
 
 
 void run(const char *pathname, unsigned short port)
 {
 	boost::asio::io_context io_context;
 	printf("to init router\r\n");
-	SIPRouter router(io_context, "mtlink.cn");
+	SIPRouter router(io_context, "www.ipv4.mtlink.cn");
+	sqlite3DB::getInstance().addUser("1001", "1234");
+	sqlite3DB::getInstance().addUser("1002", "1234");
 
 	printf("to ws server\r\n");
 	wsServer ws(&router, io_context, pathname, port);

@@ -88,7 +88,7 @@ std::string sqlite3DB::getUserPassword(const char *username) const
 	sqlite3_get_table(m_db , sql , &azResult , &nrow , &ncolumn , &zErrMsg );
 
 	if(nrow == 1 && ncolumn == 1) {
-		return azResult[0];
+		return azResult[nrow];
 	}
 
 	return "";
@@ -108,8 +108,8 @@ std::list<deviceInfo_t> sqlite3DB::getUserDevice(const char *username) const
 
 	for(int j = 0; j < ncolumn; j++) {
 		deviceInfo_t info;
-		info.m_devType = azResult[j * 2];
-		info.m_devID = azResult[j * 2 + 1];
+		info.m_devType = azResult[j * nrow + nrow];
+		info.m_devID = azResult[j * nrow + nrow + 1];
 		devices.push_back(info);
 	}
 
